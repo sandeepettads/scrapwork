@@ -1,0 +1,345 @@
+apiVersion: agents.enterprise.com/v1alpha9
+kind: Agent
+metadata:
+  name: clinical-care-coordinator
+  namespace: healthcare-dev
+spec:
+  schemaVersion: v1alpha9
+  
+  identity:
+    urn: "urn:enterprise:healthcare:agent:care-coordinator:v1"
+    uuid: "a7b8c9d0-1234-5678-90ab-cdef12345678"
+    displayName: "Clinical Care Coordinator Agent"
+    icon: "https://assets.enterprise.com/icons/healthcare-coordinator.svg"
+    version: "1.2.0"
+    git:
+      repo: "https://github.com/enterprise/healthcare-agents"
+      path: "agents/clinical/care-coordinator"
+      ref: "refs/heads/main"
+      commit: "abc123def456"
+    ownerContacts:
+      - "clinical-ops@enterprise.com"
+      - "dr.smith@enterprise.com"
+    createdAt: "2025-01-15T10:00:00Z"
+    updatedAt: "2025-08-30T14:30:00Z"
+  
+  context:
+    tenantId: "enterprise-health"
+    workspaceId: "clinical-operations"
+    environment: prod
+    labels:
+      department: "care-management"
+      compliance: "hipaa"
+      tier: "critical"
+    tags:
+      - "patient-care"
+      - "care-coordination"
+      - "clinical"
+    lifecycle: prod
+  
+  ownership:
+    organization: "Enterprise Healthcare"
+    team: "Clinical Operations"
+    user: "sarah.johnson@enterprise.com"
+    sloEmail: "clinical-slo@enterprise.com"
+    askId: "CARE-2025-001"
+  
+  role: "Senior Clinical Care Coordinator"
+  
+  goal: "Coordinate comprehensive patient care by managing care plans, tracking patient progress, facilitating provider communication, and ensuring continuity of care across multiple touchpoints while maintaining HIPAA compliance."
+  
+  backstory: "I am an experienced clinical care coordinator with 15 years of expertise in managing complex patient cases across multiple specialties. I specialize in creating personalized care plans, coordinating between providers, and ensuring patients receive timely, appropriate care while navigating the healthcare system efficiently."
+  
+  systemPrompt: |
+    You are a Senior Clinical Care Coordinator responsible for managing comprehensive patient care. Your primary responsibilities include:
+    
+    1. CARE PLAN MANAGEMENT
+    - Develop and maintain individualized care plans based on patient diagnoses, conditions, and goals
+    - Coordinate with multidisciplinary care teams
+    - Track care plan adherence and outcomes
+    - Adjust plans based on patient progress and clinical indicators
+    
+    2. PATIENT MONITORING
+    - Review patient vitals, lab results, and clinical notes
+    - Identify care gaps and potential complications early
+    - Monitor medication adherence and side effects
+    - Track appointment attendance and follow-up compliance
+    
+    3. PROVIDER COORDINATION
+    - Facilitate communication between primary care, specialists, and ancillary services
+    - Schedule and coordinate appointments
+    - Ensure proper handoffs during care transitions
+    - Manage referrals and authorizations
+    
+    4. PATIENT ENGAGEMENT
+    - Conduct regular check-ins with high-risk patients
+    - Provide education on conditions and self-management
+    - Address barriers to care (transportation, financial, social)
+    - Support medication management and adherence
+    
+    5. COMPLIANCE & DOCUMENTATION
+    - Maintain HIPAA compliance in all communications
+    - Document all care coordination activities
+    - Report quality metrics and outcomes
+    - Ensure proper consent and authorization procedures
+    
+    IMPORTANT GUIDELINES:
+    - Always verify patient identity before discussing PHI
+    - Use clinical terminology appropriately while ensuring patient understanding
+    - Escalate urgent clinical issues to appropriate providers immediately
+    - Never provide medical advice beyond your scope - defer to licensed providers
+    - Document all interactions thoroughly in the patient record
+    - Consider social determinants of health in care planning
+    
+    When processing patient information:
+    - Prioritize based on acuity and risk stratification
+    - Use evidence-based care protocols
+    - Coordinate with insurance for coverage verification
+    - Track and report care quality metrics
+  
+  persona:
+    agentType: "Clinical Specialist"
+    tone: "Professional, Empathetic, Clear"
+    topics:
+      - "Chronic Disease Management"
+      - "Care Transitions"
+      - "Medication Management"
+      - "Patient Education"
+      - "Healthcare Navigation"
+      - "Social Determinants of Health"
+  
+  ioConfig:
+    inputs:
+      - format: json
+        schemaRef: "schemas/fhir/patient-bundle.json"
+        description: "FHIR patient bundles"
+      - format: text
+        contentTypes: ["text/plain"]
+        description: "Clinical notes and communications"
+      - format: file
+        contentTypes: ["application/pdf", "application/dicom"]
+        description: "Medical documents and imaging"
+    outputs:
+      - format: json
+        schemaRef: "schemas/fhir/care-plan.json"
+        description: "FHIR care plans"
+      - format: text
+        contentTypes: ["text/plain", "text/html"]
+        description: "Care summaries and reports"
+  
+  behavior:
+    responseFormat:
+      type: json
+      jsonSchemaRef: "schemas/clinical/care-response.json"
+    toolChoice: auto
+    reasoning:
+      enabled: true
+      maxReasoningTokens: 4000
+    determinism:
+      seed: 42
+      idempotencyKey: "${patientId}-${timestamp}"
+    contextWindow:
+      maxPromptTokens: 100000
+      truncationStrategy: middle
+  
+  llmGateways:
+    - identity:
+        urn: "urn:enterprise:gateway:clinical-llm:v1"
+        displayName: "Clinical LLM Gateway"
+      endpoint: "https://llm-gateway.enterprise.com/clinical/v1"
+      vendor: "AzureOpenAI"
+      apiVersion: "2024-08-01-preview"
+      defaultModel: "gpt-4-turbo"
+      models:
+        - "gpt-4-turbo"
+        - "gpt-4o"
+      authentication:
+        type: ManagedIdentity
+        managedIdentity:
+          clientId: "clinical-agent-identity"
+  
+  llm:
+    provider: AzureOpenAI
+    gatewayRef:
+      urn: "urn:enterprise:gateway:clinical-llm:v1"
+    model: "gpt-4-turbo"
+    parameters:
+      temperature: 0.3
+      topP: 0.9
+      maxTokens: 4000
+      stopSequences: ["[END_CARE_PLAN]", "[PHI_BOUNDARY]"]
+  
+  mcpServers:
+    - identity:
+        urn: "urn:enterprise:mcp:ehr-server:v1"
+        displayName: "EHR Integration Server"
+      url: "https://mcp-ehr.enterprise.com"
+      protocol: https
+      authentication:
+        type: OAuth2.1
+        oauth2_1:
+          clientId: "clinical-agent"
+          clientSecretRef:
+            keyName: "ehr-client-secret"
+          tokenUrl: "https://auth.enterprise.com/oauth/token"
+          scope: "ehr.read ehr.write care-plans.manage"
+    
+    - identity:
+        urn: "urn:enterprise:mcp:scheduling:v1"
+        displayName: "Scheduling System"
+      url: "https://mcp-scheduling.enterprise.com"
+      protocol: https
+      authentication:
+        type: ApiKey
+        apiKey:
+          headerName: "X-API-Key"
+          secretRef:
+            keyName: "scheduling-api-key"
+  
+  tools:
+    - identity:
+        urn: "urn:enterprise:tool:patient-lookup:v1"
+      name: "patientLookup"
+      description: "Search and retrieve patient records from EHR"
+      mcp:
+        serverRef:
+          urn: "urn:enterprise:mcp:ehr-server:v1"
+        toolName: "searchPatients"
+      timeoutMs: 5000
+      retries: 2
+      limits:
+        rpm: 100
+        concurrency: 5
+    
+    - identity:
+        urn: "urn:enterprise:tool:care-plan:v1"
+      name: "carePlanManager"
+      description: "Create, update, and manage patient care plans"
+      mcp:
+        serverRef:
+          urn: "urn:enterprise:mcp:ehr-server:v1"
+        toolName: "manageCareplan"
+      defaults:
+        planType: "comprehensive"
+        reviewPeriod: "30days"
+      timeoutMs: 10000
+    
+    - identity:
+        urn: "urn:enterprise:tool:appointment:v1"
+      name: "appointmentScheduler"
+      description: "Schedule and manage patient appointments"
+      mcp:
+        serverRef:
+          urn: "urn:enterprise:mcp:scheduling:v1"
+        toolName: "scheduleAppointment"
+      cacheTTL: 300
+  
+  knowledgeBases:
+    - identity:
+        urn: "urn:enterprise:kb:clinical-guidelines:v1"
+      name: "clinicalGuidelines"
+      type: AzureAISearch
+      connection:
+        endpoint: "https://search-clinical.enterprise.com"
+        index: "clinical-guidelines-v2"
+        connectionStringSecretRef:
+          keyName: "azure-search-connection"
+      indexing:
+        autoIngest: true
+        schedule: "0 2 * * *"
+    
+    - identity:
+        urn: "urn:enterprise:kb:drug-interactions:v1"
+      name: "drugInteractions"
+      type: PostgresPgvector
+      connection:
+        database: "clinical_knowledge"
+        connectionStringSecretRef:
+          keyName: "postgres-clinical-connection"
+  
+  rag:
+    ingestion:
+      chunker: semantic
+      chunkSize: 512
+      chunkOverlap: 50
+      dedupe: true
+      schedule: "0 */6 * * *"
+    embedding:
+      model: "text-embedding-3-large"
+      dimension: 3072
+    index:
+      metric: cosine
+      hybrid: true
+      hnsw:
+        m: 16
+        efConstruction: 200
+    retrieval:
+      topK: 10
+      mmr: true
+      recencyBoost: true
+      requireCitations: true
+    retention:
+      ttlDays: 365
+      lineage: true
+  
+  stateManagement:
+    memory:
+      type: Redis
+      retentionPolicy: "session"
+    session:
+      ttlSeconds: 28800
+      store: Redis
+  
+  secretsProvider:
+    type: AzureKeyVault
+    azureKeyVault:
+      vaultName: "clinical-secrets-prod"
+      tenantId: "enterprise-tenant-id"
+      useManagedIdentity: true
+  
+  security:
+    rbac:
+      roles: ["ClinicalCoordinator", "CareManager"]
+    dataPolicy:
+      classification: PHI
+      redactPII: true
+      retentionDays: 2555
+    egress:
+      allowlist:
+        - "*.enterprise.com"
+        - "api.fhir.org"
+      mtls: true
+  
+  ops:
+    timeouts:
+      defaultMs: 30000
+    retries:
+      max: 3
+      backoffMs: 1000
+    rateLimit:
+      rpm: 600
+      rps: 20
+    resources:
+      cpu: "2"
+      memory: "4Gi"
+  
+  telemetry:
+    opentelemetry:
+      enabled: true
+      serviceName: "clinical-care-coordinator"
+    logs:
+      redaction: true
+    metrics:
+      - "care_plans_created"
+      - "patient_interactions"
+      - "care_gaps_identified"
+      - "coordination_tasks_completed"
+
+status:
+  phase: Running
+  conditions:
+    - type: Available
+      status: "True"
+      lastTransitionTime: "2025-08-30T14:30:00Z"
+      reason: "DeploymentSuccessful"
+      message: "Agent is running and healthy"
